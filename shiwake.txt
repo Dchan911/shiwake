@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簿記3級仕訳マスター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            background-color: #f0fdf4;
+            user-select: none;
+        }
+        .card {
+            box-shadow: 0 8px 0 #dcfce7;
+            transition: all 0.2s ease;
+        }
+        .card:active {
+            box-shadow: 0 2px 0 #dcfce7;
+            transform: translateY(4px);
+        }
+        .btn-account {
+            transition: transform 0.1s;
+        }
+        .btn-account:active {
+            transform: scale(0.95);
+        }
+        .overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 50;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center p-4">
+
+    <!-- Header -->
+    <header class="w-full max-w-md flex justify-between items-center mb-6">
+        <h1 class="text-2xl font-bold text-green-600">📖 簿記3級：実践仕訳ドリル</h1>
+        <div class="bg-white px-4 py-1 rounded-full border-2 border-green-200 font-bold text-green-700">
+            Score: <span id="score">0</span>
+        </div>
+    </header>
+
+    <!-- Progress Bar -->
+    <div class="w-full max-w-md bg-gray-200 rounded-full h-4 mb-6 overflow-hidden">
+        <div id="progress" class="bg-green-400 h-full transition-all duration-500" style="width: 0%"></div>
+    </div>
+
+    <!-- Main Game Card -->
+    <main id="game-container" class="w-full max-w-md bg-white rounded-3xl p-6 card border-2 border-green-100 mb-8">
+        <div class="flex justify-between items-center mb-2">
+            <div class="text-sm font-bold text-gray-400">第 <span id="q-number">1</span> / <span id="q-total"></span> 問</div>
+            <div id="review-badge" class="hidden bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded-full font-bold border border-orange-200">復習モード</div>
+        </div>
+        <div id="q-text" class="text-lg font-bold text-gray-700 mb-4 min-h-[5rem] flex items-center">
+            Loading...
+        </div>
+        <div id="q-column" class="bg-blue-50 text-blue-800 text-xs p-3 rounded-xl mb-6 border border-blue-100 leading-relaxed shadow-inner">
+            <!-- 豆知識コラム -->
+        </div>
+
+        <!-- Slot Display -->
+        <div class="grid grid-cols-2 gap-4 mb-6">
+            <div class="space-y-2">
+                <div class="text-center text-xs font-bold text-blue-500">借方 (左)</div>
+                <div id="slot-debit" class="h-14 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center text-blue-600 font-bold bg-blue-50 cursor-pointer">
+                    選択
+                </div>
+            </div>
+            <div class="space-y-2">
+                <div class="text-center text-xs font-bold text-red-500">貸方 (右)</div>
+                <div id="slot-credit" class="h-14 border-2 border-dashed border-red-200 rounded-xl flex items-center justify-center text-red-600 font-bold bg-red-50 cursor-pointer">
+                    選択
+                </div>
+            </div>
+        </div>
+
+        <button id="submit-btn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-xl shadow-lg hover:bg-green-600 active:bg-green-700 transition-colors">
+            回答する！
+        </button>
+    </main>
+
+    <!-- Account Selection Grid -->
+    <div id="account-area" class="w-full max-w-md">
+        <p class="text-center text-gray-500 text-sm mb-4 font-bold">使用する勘定科目 👇</p>
+        <div id="account-grid" class="grid grid-cols-3 gap-2 pb-10">
+            <!-- Dynamic Buttons -->
+        </div>
+    </div>
+
+    <!-- Result Overlay -->
+    <div id="modal" class="overlay">
+        <div class="bg-white p-8 rounded-3xl max-w-xs w-full text-center shadow-2xl mx-4 border-4 border-green-400">
+            <div id="modal-icon" class="text-6xl mb-4">✨</div>
+            <h2 id="modal-title" class="text-2xl font-bold mb-2">正解！</h2>
+            <div id="modal-desc" class="text-gray-600 mb-6 text-sm whitespace-pre-wrap text-left"></div>
+            <button id="next-btn" class="w-full py-3 bg-green-500 text-white rounded-xl font-bold shadow-md hover:bg-green-600">次へすすむ</button>
+        </div>
+    </div>
+
+    <script>
+        const allQuestions = [
+            { id: 1, question: "社長から「盗難が怖いからレジの現金50万円を銀行に預けてこい」と言われ、当座預金口座に預け入れた。", debit: "当座預金", credit: "現金", column: "コラム：当座預金は企業が作る「利息のつかない」口座。小切手で支払うために作られます。" },
+            { id: 2, question: "新商品の在庫3万円分を仕入れ、財布から現金で支払った。なお、配送業者への運賃は無料だった。", debit: "仕入", credit: "現金", column: "コラム：商品を仕入れた時の「運賃」を自分が払う場合、それは商品の価格に含めて計算するルールがあるよ（付随費用）。" },
+            { id: 3, question: "こだわりの商品5万円分を販売した。代金は相手先から当座預金に振り込まれたと通知があった。", debit: "当座預金", credit: "売上", column: "コラム：銀行の営業時間が終わっても、データ上の「当座預金」は即座に動く。これがビジネスのスピード感だね。" },
+            { id: 4, question: "取引先との付き合いで、2万円分の材料を仕入れた。代金は「来月末に払うね」と約束した。", debit: "仕入", credit: "買掛金", column: "コラム：企業同士の取引は「その場で現金」は稀。信頼関係があるからこそ「掛け（ツケ）」が成立するんだ。" },
+            { id: 5, question: "来月末の期日が来た！ 以前の買掛金2万円を、金庫の現金からキッチリ支払った。", debit: "買掛金", credit: "現金", column: "コラム：買掛金を期日通りに払うことは、会社の信用スコア（クレジット）を守る最も大切な行為だよ。" },
+            { id: 6, question: "お得意様に商品4万円分を発送した。代金は「いつも通りツケで」と言われたので、掛けとした。", debit: "売掛金", credit: "売上", column: "コラム：売掛金は「将来お金をもらう権利」。これが多いと景気が良く見えるけど、回収できないと「黒字倒産」の危険も？" },
+            { id: 7, question: "「ツケ」にしていた4万円が、無事に当座預金に振り込まれた。回収成功！", debit: "当座預金", credit: "売掛金", column: "コラム：売掛金の回収が遅れることを「滞留（たいりゅう）」と呼ぶ。経営者が一番嫌がる言葉の一つだよ。" },
+            { id: 8, question: "新工場の準備金10万円を銀行から借り、ひとまず当座預金に入れてもらった。", debit: "当座預金", credit: "借入金", column: "コラム：銀行からお金を借りるには、決算書（簿記で作る書類）を提出して審査を受ける必要があるんだ。" },
+            { id: 9, question: "儲かったので、借金のうち5万円を現金で返済した。少し肩の荷が下りた。", debit: "借入金", credit: "現金", column: "コラム：返済が1日でも遅れると、銀行からの信頼はガタ落ち。簿記の記録は正確さが命だね。" },
+            { id: 10, question: "限定品を仕入れるため、予約金2,000円を現金で先払いした。残りは商品が届いてから払う。", debit: "前払金", credit: "現金", column: "コラム：コンサートのチケットを予約する時に前もってお金を払うのと同じ感覚。それがビジネスでは「前払金」になるよ。" },
+            { id: 11, question: "予約していた商品1万円分が届いた！ 以前に払った内金を差し引き、残りは「掛け」とした。※借方の仕訳は？", debit: "仕入", credit: "前払金", column: "コラム：先に払ったチケット（前払金）を使って、実際のライブ（仕入）を体験した、というイメージだね。" },
+            { id: 12, question: "お客様から「この商品を確保して」と頼まれ、手付金3,000円を現金で受け取った。", debit: "現金", credit: "前受金", column: "コラム：クリーニング屋さんや美容院で、先に回数券を売った時なども「前受金」として処理されることがあるよ。" },
+            { id: 13, question: "取り置きしていた商品1.5万円分をお渡しした！ 預かっていた手付金を充当した。※貸方の仕訳は？", debit: "前受金", credit: "売上", column: "コラム：お金を先にもらっている以上、商品を渡すまでは「義務（負債）」を背負っていることになるんだ。" },
+            { id: 14, question: "急な出費に備えて、当座預金から3万円を引き出して金庫に移した。", debit: "現金", credit: "当座預金", column: "コラム：会社の現金は、1円のズレも許されない。毎日「金庫」の中身と「帳簿」を照らし合わせるんだ（現金実査）。" },
+            { id: 15, question: "届いた商品5,000円分が不良品だった！ すぐに突き返し、その分の「ツケ」を帳消しにした。", debit: "買掛金", credit: "仕入", column: "コラム：商品が壊れていた時の「返品」は、簿記の世界では「取引そのものをなかったことにする」魔法の処理だよ。" },
+            { id: 16, question: "販売した商品3,000円分が「イメージと違う」と戻ってきた。売掛金から差し引くことにした。", debit: "売上", credit: "売掛金", column: "コラム：Amazonなどで注文をキャンセルした時、裏側ではこれと同じ仕訳が自動で動いているんだ。" },
+            { id: 17, question: "1.2万円の仕入代金を、以前預かっていた「前受金」と相殺して決済した。※貸方の仕訳は？", debit: "仕入", credit: "前受金", column: "コラム：「相殺（そうさい）」は、互いの貸し借りをチャラにすること。計算の手間を省くビジネスの知恵だね。" },
+            { id: 18, question: "「ごめん、2万円の売上を入力し忘れてた！」と店長が慌ててきた。本日、現金売上として修正した。", debit: "現金", credit: "売上", column: "コラム：どんなに優秀な経理担当者でもミスはする。大切なのは、気づいた時に正しく「修正」することだね。" },
+            { id: 19, question: "仕入先への支払8,000円を、実は以前貸していたお金（借入金の反対）で相殺した。※貸方の仕訳は？", debit: "仕入", credit: "借入金", column: "コラム：「お金を返す代わりに、ウチの自慢の商品で手を打ってくれ」という物々交換のような取引だね。" },
+            { id: 20, question: "売掛金10万円が回収され、そのまま銀行の当座預金に直行させた。", debit: "当座預金", credit: "売掛金", column: "コラム：売掛金が預金に変わる瞬間は、経営者が一番ホッとする瞬間。キャッシュイズキング（現金こそ王様）だ！" },
+            { id: 21, question: "棚卸をしたら現金が1,000円足りない。原因不明だが、一旦「仕入」扱いで処理することにした。", debit: "仕入", credit: "現金", column: "コラム：もし金庫のお金が足りなかったら、原因を徹底追及。時にはゴミ箱の中まで探すこともあるよ。" },
+            { id: 22, question: "手元の小銭がパンパンになったので、5万円を当座預金に入金した。", debit: "当座預金", credit: "現金", column: "コラム：夜間金庫というシステムを知ってる？ 銀行が閉まった後でも、売上金を預けられる特別なポストがあるんだ。" },
+            { id: 23, question: "買掛金5,000円を、ネットバンキング（当座預金）からパパッと支払った。", debit: "買掛金", credit: "当座預金", column: "コラム：振り込み手数料がかかることもあるけど、簿記ではそれを「支払手数料」という別の科目で記録するよ。" },
+            { id: 24, question: "サービスを提供し、以前もらっていた予約金（前受金）を売上に振り替えた。※借方の仕訳は？", debit: "前受金", credit: "売上", column: "コラム：前受金は「先に預かっている負債」。売上が立って初めて、その重荷から解放されるんだ。" },
+            { id: 25, question: "「これ、今日使うから買ってきて！」と頼まれ商品を仕入れ、代金は当座預金から即座に払った。※借方の仕訳は？", debit: "当座預金", credit: "仕入", column: "コラム：仕入れと預金を同時にこなす。商売人の忙しさが伝わってくるような仕訳だね。" },
+            { id: 26, question: "借入金1万円を返す際、たまたま持っていた売掛金を譲渡してチャラにしてもらった。※借方の仕訳は？", debit: "借入金", credit: "売掛金", column: "コラム：売掛金という「権利」を譲渡して、借金をゼロにする。これも立派な資金繰りのテクニックだよ。" },
+            { id: 27, question: "間違えて買掛金を二重に払っていた！ 現金で返してもらい、帳簿を修正した。※借方の仕訳は？", debit: "現金", credit: "買掛金", column: "コラム：二重払いは大問題。だからこそ「領収書」や「振込明細」をしっかり保管しておくのが簿記の基本。" },
+            { id: 28, question: "オフィス用に1万円の備品を仕入れた。代金は以前の「前払金」で精算した。※借方の仕訳は？", debit: "仕入", credit: "前払金", column: "コラム：iPhoneの予約注文。先に払った予約金が、端末が届いた瞬間に「仕入」に変わるイメージだね。" },
+            { id: 29, question: "回収した売掛金を、そのまま銀行の借入金返済に回した。※借方の仕訳は？", debit: "借入金", credit: "売掛金", column: "コラム：お金が手元を通り過ぎていく。でも、資産の「売掛金」も負債の「借入金」も減って、中身は健全になってるぞ。" },
+            { id: 30, question: "当座預金の残高が売掛金の入金で増えた！ これで今月の給料も払えるぞ。", debit: "当座預金", credit: "売掛金", column: "コラム：全ての取引が完了。簿記を学ぶと、世の中のお金がどう流れているか「透けて」見えるようになるよ！" }
+        ];
+
+        // 限定勘定科目
+        const accounts = ["現金", "当座預金", "借入金", "売掛金", "買掛金", "仕入", "売上", "前払金", "前受金"];
+
+        // State
+        let currentQuestions = [...allQuestions];
+        let currentIdx = 0;
+        let score = 0;
+        let wrongQuestionIds = [];
+        let selectedSide = 'debit';
+        let selection = { debit: null, credit: null };
+        let isReviewMode = false;
+
+        // DOM Elements
+        let qText, qColumn, qNum, qTotal, slotDebit, slotCredit, reviewBadge;
+        const accountGrid = document.getElementById('account-grid');
+        const modal = document.getElementById('modal');
+        const nextBtn = document.getElementById('next-btn');
+        const progressBar = document.getElementById('progress');
+        const scoreDisplay = document.getElementById('score');
+
+        function initGrid() {
+            accountGrid.innerHTML = '';
+            accounts.forEach(acc => {
+                const btn = document.createElement('button');
+                btn.className = "bg-white border-2 border-gray-100 py-4 rounded-xl text-sm font-bold text-gray-700 hover:border-green-300 btn-account card shadow-sm";
+                btn.textContent = acc;
+                btn.onclick = () => selectAccount(acc);
+                accountGrid.appendChild(btn);
+            });
+        }
+
+        function loadQuestion() {
+            const q = currentQuestions[currentIdx];
+            if (!q) return;
+
+            qText.textContent = q.question;
+            qColumn.textContent = q.column;
+            qNum.textContent = currentIdx + 1;
+            qTotal.textContent = currentQuestions.length;
+            selection = { debit: null, credit: null };
+            updateSlots();
+            selectedSide = 'debit';
+            highlightActiveSlot();
+            
+            const progressPercent = (currentIdx / currentQuestions.length) * 100;
+            progressBar.style.width = `${progressPercent}%`;
+
+            if (isReviewMode) reviewBadge.classList.remove('hidden');
+            else reviewBadge.classList.add('hidden');
+        }
+
+        function selectAccount(acc) {
+            selection[selectedSide] = acc;
+            updateSlots();
+            if(selectedSide === 'debit' && !selection.credit) {
+                selectedSide = 'credit';
+            } else if (selectedSide === 'credit' && !selection.debit) {
+                selectedSide = 'debit';
+            }
+            highlightActiveSlot();
+        }
+
+        function updateSlots() {
+            slotDebit.textContent = selection.debit || "選択";
+            slotCredit.textContent = selection.credit || "選択";
+            slotDebit.className = `h-14 border-2 rounded-xl flex items-center justify-center font-bold transition-all ${selection.debit ? 'bg-blue-500 text-white border-blue-600' : 'border-dashed border-blue-200 text-blue-300 bg-blue-50'}`;
+            slotCredit.className = `h-14 border-2 rounded-xl flex items-center justify-center font-bold transition-all ${selection.credit ? 'bg-red-500 text-white border-red-600' : 'border-dashed border-red-200 text-red-300 bg-red-50'}`;
+        }
+
+        function highlightActiveSlot() {
+            slotDebit.classList.remove('ring-4', 'ring-blue-300');
+            slotCredit.classList.remove('ring-4', 'ring-red-300');
+            if(selectedSide === 'debit') slotDebit.classList.add('ring-4', 'ring-blue-300');
+            else slotCredit.classList.add('ring-4', 'ring-red-300');
+        }
+
+        function handleAnswer() {
+            if(!selection.debit || !selection.credit) return;
+
+            const q = currentQuestions[currentIdx];
+            const isCorrect = selection.debit === q.debit && selection.credit === q.credit;
+
+            if(isCorrect) {
+                if (!isReviewMode) score += 10;
+                scoreDisplay.textContent = score;
+                showModal("正解！✨", "ビジネススキルがアップしましたね！", "🎉");
+            } else {
+                if (!wrongQuestionIds.includes(q.id)) {
+                    wrongQuestionIds.push(q.id);
+                }
+                showModal("仕訳ミス！", `正しい帳簿記録は...\n借方: 【${q.debit}】\n貸方: 【${q.credit}】`, "🤔");
+            }
+        }
+
+        function showModal(title, desc, icon) {
+            document.getElementById('modal-title').textContent = title;
+            document.getElementById('modal-desc').innerText = desc;
+            document.getElementById('modal-icon').textContent = icon;
+            modal.style.display = 'flex';
+        }
+
+        nextBtn.onclick = () => {
+            modal.style.display = 'none';
+            currentIdx++;
+            if(currentIdx < currentQuestions.length) {
+                loadQuestion();
+            } else {
+                showFinalResult();
+            }
+        };
+
+        function showFinalResult() {
+            progressBar.style.width = `100%`;
+            const container = document.getElementById('game-container');
+            const hasWrong = wrongQuestionIds.length > 0;
+            
+            let html = `
+                <div class="text-center py-4">
+                    <div class="text-6xl mb-4">${hasWrong ? '📝' : '🏆'}</div>
+                    <h2 class="text-2xl font-bold text-gray-700 mb-2">${isReviewMode ? '復習完了！' : 'ミッション完了！'}</h2>
+                    <div class="text-4xl font-black text-green-500 mb-4">${score}点</div>
+                    <p class="text-gray-500 mb-6 text-sm">間違えた取引: ${wrongQuestionIds.length} 件</p>
+                    
+                    <div class="flex flex-col gap-3">
+            `;
+
+            if (hasWrong) {
+                html += `<button onclick="startReview()" class="w-full py-3 bg-orange-500 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">ミスした問題だけ解き直す</button>`;
+            }
+
+            html += `
+                        <button onclick="resetAll()" class="w-full py-3 bg-green-500 text-white rounded-xl font-bold shadow-lg active:scale-95 transition-transform">最初から出勤する</button>
+                    </div>
+                </div>
+            `;
+            
+            container.innerHTML = html;
+            document.getElementById('account-area').style.display = 'none';
+        }
+
+        window.startReview = function() {
+            currentQuestions = allQuestions.filter(q => wrongQuestionIds.includes(q.id));
+            wrongQuestionIds = [];
+            currentIdx = 0;
+            isReviewMode = true;
+            restoreUI();
+            loadQuestion();
+        }
+
+        window.resetAll = function() {
+            currentQuestions = [...allQuestions];
+            wrongQuestionIds = [];
+            currentIdx = 0;
+            score = 0;
+            scoreDisplay.textContent = "0";
+            isReviewMode = false;
+            restoreUI();
+            loadQuestion();
+        }
+
+        function restoreUI() {
+            const container = document.getElementById('game-container');
+            container.innerHTML = `
+                <div class="flex justify-between items-center mb-2">
+                    <div class="text-sm font-bold text-gray-400">第 <span id="q-number">1</span> / <span id="q-total"></span> 問</div>
+                    <div id="review-badge" class="hidden bg-orange-100 text-orange-600 text-[10px] px-2 py-0.5 rounded-full font-bold border border-orange-200">復習モード</div>
+                </div>
+                <div id="q-text" class="text-lg font-bold text-gray-700 mb-4 min-h-[5rem] flex items-center">Loading...</div>
+                <div id="q-column" class="bg-blue-50 text-blue-800 text-xs p-3 rounded-xl mb-6 border border-blue-100 leading-relaxed shadow-inner"></div>
+                <div class="grid grid-cols-2 gap-4 mb-6">
+                    <div class="space-y-2">
+                        <div class="text-center text-xs font-bold text-blue-500">借方 (左)</div>
+                        <div id="slot-debit" class="h-14 border-2 border-dashed border-blue-200 rounded-xl flex items-center justify-center text-blue-600 font-bold bg-blue-50 cursor-pointer">選択</div>
+                    </div>
+                    <div class="space-y-2">
+                        <div class="text-center text-xs font-bold text-red-500">貸方 (右)</div>
+                        <div id="slot-credit" class="h-14 border-2 border-dashed border-red-200 rounded-xl flex items-center justify-center text-red-600 font-bold bg-red-50 cursor-pointer">選択</div>
+                    </div>
+                </div>
+                <button id="submit-btn" class="w-full py-4 bg-green-500 text-white rounded-2xl font-bold text-xl shadow-lg">回答する！</button>
+            `;
+            bindRefs();
+            document.getElementById('account-area').style.display = 'block';
+        }
+
+        function bindRefs() {
+            qText = document.getElementById('q-text');
+            qColumn = document.getElementById('q-column');
+            qNum = document.getElementById('q-number');
+            qTotal = document.getElementById('q-total');
+            slotDebit = document.getElementById('slot-debit');
+            slotCredit = document.getElementById('slot-credit');
+            reviewBadge = document.getElementById('review-badge');
+            
+            slotDebit.onclick = () => { selectedSide = 'debit'; highlightActiveSlot(); };
+            slotCredit.onclick = () => { selectedSide = 'credit'; highlightActiveSlot(); };
+            document.getElementById('submit-btn').onclick = handleAnswer;
+        }
+
+        bindRefs();
+        initGrid();
+        loadQuestion();
+
+    </script>
+</body>
+</html>
